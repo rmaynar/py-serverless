@@ -1,3 +1,61 @@
+def hello_http(request):
+    """ HTTP Cloud Function
+    Arg: request (flask.Request)
+    Res: arg(s) for flask.make_response
+    """
+    name = request.args.get('name', 'World')
+    return 'Hello, {}!'.format(name)
+
+def get_ebooks_by_author(request):
+    """ HTTP Cloud Function
+    Prints available ebooks by "author" (optional: "lang")
+    Arg: request (flask.Request)
+    """
+    author = request.args.get('author', 'JRR Tolkien')
+    lang = request.args.get('lang', 'en')
+    author_books = print_author_books(author, lang)
+    headers = {'Content-Type': 'text/plain; charset=utf-8'}
+    return author_books, headers
+
+def get_google_books_data(author, lang):
+    """ Fetches data from Google Books API """
+    from requests import get
+
+    books = []
+    url = 'https://www.googleapis.com/books/v1/volumes'
+    book_fields = (
+        'items('
+        'id'
+        ',accessInfo(epub/isAvailable)'
+        ',volumeInfo(title,subtitle,language,pageCount)'
+        ')'
+    )
+    req_item_idx = 0  # Response is paginated
+    req_item_cnt = 40  # Default=10, Max=40
+
+    while True:
+        params = {
+            'q': 'inauthor:%s' % author,
+            'startIndex': req_item_idx,
+            'maxResults': req_item_cnt,
+            'langRestrict': lang,
+            'download': 'epub',
+            'printType': 'books',
+            'showPreorders': 'true',
+            'fields': book_fields,
+        }
+        response = get(url, params=params)
+        response.raise_for_status()
+        book_items = response.json().get('items', None)
+        if book_items is None:
+            break
+        books += book_items
+        if len(book_items) != req_item_cnt:
+            break  # Last response page
+        req_item_idx += req_item_cnt
+
+    return books
+
 def print_author_books(author, lang):
     """ Returns book data in plain text table """
     def sort_by_page_count(book):
